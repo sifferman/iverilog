@@ -4527,6 +4527,40 @@ NetExpr* PEIdent::elaborate_expr(Design*des, NetScope*scope,
       symbol_search_results sr;
       symbol_search(this, des, scope, path_, lexical_pos_, &sr);
 
+	// A parameter used where a typed value is expected -- e.g. a parameter
+	// passed as a parameter override to a child instance (notably a
+	// string-typed parameter). The net-only code below cannot bind it, so
+	// elaborate it as a parameter, mirroring the untyped elaborate_expr().
+      if (sr.par_val != 0) {
+	    if (!sr.path_tail.empty()) {
+		  cerr << get_fileline() << ": error: Parameter name "
+		       << sr.path_head << " can't have member names ("
+		       << sr.path_tail << ")." << endl;
+		  des->errors += 1;
+	    }
+	      // A string-typed target (e.g. a string parameter override) must
+	      // keep the value's string type; the width-based parameter
+	      // elaboration below would turn it into a vector and fail the
+	      // implicit-cast check at the call site.
+	      // A string-typed target (e.g. a string parameter override) needs a
+	      // string-typed result. The parameter value is stored as a vector
+	      // constant, so rebuild it as a NetECString; the width-based
+	      // parameter elaboration below would keep it a vector and fail the
+	      // implicit-cast check at the call site.
+	    if (ntype && ntype->base_type() == IVL_VT_STRING) {
+		  if (const NetEConst*cv = dynamic_cast<const NetEConst*>(sr.par_val)) {
+			NetECString*sv = new NetECString(cv->value().as_string());
+			sv->set_line(*this);
+			return sv;
+		  }
+		  return sr.par_val->dup_expr();
+	    }
+	    return elaborate_expr_param_or_specparam_(des, scope, sr.par_val,
+						      sr.scope, sr.type,
+						      sr.par_val->expr_width(),
+						      flags);
+      }
+
       if (!sr.net) {
             cerr << get_fileline() << ": error: Unable to bind variable `"
 	         << path_ << "' in `" << scope_path(scope) << "'" << endl;
