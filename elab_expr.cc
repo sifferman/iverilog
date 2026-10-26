@@ -7075,9 +7075,12 @@ NetExpr* PEIdent::elaborate_expr_param_part_(Design*des, NetScope*scope,
       ivl_assert(*this, par_ex);
 
 
-      long par_msv, par_lsv;
-      if (! calculate_param_range(*this, par_type, par_msv, par_lsv,
-				  par_ex->value().len())) return 0;
+      long par_msv, par_lsv, slice_off;
+      unsigned long slice_wid;
+      if (! calculate_param_slice(*this, des, scope, par_type,
+				  par_ex->value().len(), path_.back().index,
+				  par_msv, par_lsv, slice_off, slice_wid))
+	    return 0;
 
       if (! parts_defined_flag) {
 	    if (warn_ob_select) {
@@ -7110,7 +7113,7 @@ NetExpr* PEIdent::elaborate_expr_param_part_(Design*des, NetScope*scope,
 	    return 0;
       }
 
-      long wid = 1 + labs(msv-lsv);
+      long wid = (1 + labs(msv-lsv)) * slice_wid;
 
 	// Watch out for reversed bit numbering. We're making
 	// the part select from LSB to MSB.
@@ -7120,6 +7123,7 @@ NetExpr* PEIdent::elaborate_expr_param_part_(Design*des, NetScope*scope,
       } else {
 	    base = lsv - par_lsv;
       }
+      base = slice_off + base * slice_wid;
 
       if (warn_ob_select) {
 	    if (base < 0) {
