@@ -7198,15 +7198,20 @@ NetExpr* PEIdent::elaborate_expr_param_idx_up_do_(Design*des, NetScope*scope,
       const NetEConst*par_ex = dynamic_cast<const NetEConst*> (par);
       ivl_assert(*this, par_ex);
 
-      long par_msv, par_lsv;
-      if(! calculate_param_range(*this, par_type, par_msv, par_lsv,
-				 par_ex->value().len())) return 0;
+      long par_msv, par_lsv, slice_off;
+      unsigned long slice_wid;
+      if (! calculate_param_slice(*this, des, scope, par_type,
+				  par_ex->value().len(), path_.back().index,
+				  par_msv, par_lsv, slice_off, slice_wid))
+	    return 0;
 
       NetExpr*base = calculate_up_do_base_(des, scope, need_const);
       if (base == 0) return 0;
 
-	// Use the part select width already calculated by test_width().
+	// Use the part select width already calculated by test_width(),
+	// which counts elements of slice_wid bits each.
       unsigned long wid = min_width_;
+      unsigned long count = wid / slice_wid;
 
       perm_string name = peek_tail_name(path_);
 
@@ -7242,7 +7247,7 @@ NetExpr* PEIdent::elaborate_expr_param_idx_up_do_(Design*des, NetScope*scope,
 	    long lsv = base_c->value().as_long();
 	    long par_base = par_lsv;
 	    if (!up)
-		  par_base += wid - 1;
+		  par_base += count - 1;
 
 	      // Watch out for reversed bit numbering. We're making
 	      // the part select from LSB to MSB.
@@ -7250,7 +7255,7 @@ NetExpr* PEIdent::elaborate_expr_param_idx_up_do_(Design*des, NetScope*scope,
 		  par_base = lsv;
 		  lsv = par_lsv;
 		  if (up)
-			lsv -= wid - 1;
+			lsv -= count - 1;
 	    }
 
 	    if (warn_ob_select) {
@@ -7262,18 +7267,22 @@ NetExpr* PEIdent::elaborate_expr_param_idx_up_do_(Design*des, NetScope*scope,
 		    // Get the parameter values width.
                   long pwid = -1;
                   if (par_ex->has_width()) pwid = par_ex->expr_width()-1;
-                  warn_param_ob(par_msv, par_lsv, defined, lsv-par_base, wid,
+                  warn_param_ob(par_msv, par_lsv, defined, lsv-par_base, count,
                                 pwid, this, name, up);
 	    }
 
+	    long base_bit = slice_off + (lsv-par_base) * slice_wid;
 	    verinum result = param_part_select_bits(par_ex->value(), wid,
-						    lsv-par_base);
+						    base_bit);
 	    NetEConst*result_ex = new NetEConst(result);
 	    result_ex->set_line(*this);
 	    return result_ex;
       }
 
-      base = normalize_variable_base(base, par_msv, par_lsv, wid, up);
+      base = normalize_variable_base(base, par_msv, par_lsv, count, up,
+				     slice_off / (long)slice_wid);
+      if (slice_wid > 1)
+	    base = scale_expr_by_const(base, slice_wid);
 
 	/* Create a parameter reference for the variable select. */
       NetEConstParam*ptmp = new NetEConstParam(found_in, name, par_ex->value());
