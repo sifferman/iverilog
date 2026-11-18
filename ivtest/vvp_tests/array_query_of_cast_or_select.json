@@ -1,0 +1,5 @@
+{
+    "type"          : "normal",
+    "source"        : "array_query_of_cast_or_select.v",
+    "iverilog-args" : [ "-g2005-sv" ]
+}

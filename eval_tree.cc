@@ -2177,7 +2177,18 @@ static bool get_array_info(const NetExpr*arg, long dim,
 	    return false;
       }
       if (const NetESelect*select = dynamic_cast<const NetESelect*>(arg)) {
+	    if (select->net_type() == 0) {
+		    /* If the base expression is null, this is a sign cast or
+		     * a size cast, which has the single dimension [n-1:0]
+		     * (IEEE 1800-2023 6.24.1). The bounds of a bit/part
+		     * select are not available. */
+		  if (select->select() || dim != 1) return true;
+		  left = select->expr_width() - 1;
+		  right = 0;
+		  return false;
+	    }
 	    const netranges_t&dim_vals = select->net_type()->slice_dimensions();
+	    if (dim > (long)dim_vals.size()) return true;
 	    const netrange_t&range = dim_vals[dim-1];
 	    left = range.get_msb();
 	    right = range.get_lsb();
